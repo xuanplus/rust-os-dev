@@ -5,8 +5,11 @@ use x86_64::{
     PhysAddr, VirtAddr,
 };
 
+static mut PHYSICAL_MEMORY_OFFSET: VirtAddr = VirtAddr::zero();
+
 pub unsafe fn init(physical_memory_offset: VirtAddr) -> OffsetPageTable<'static> {
     let level_4_table = active_level_4_table(physical_memory_offset);
+    unsafe { PHYSICAL_MEMORY_OFFSET = physical_memory_offset; }
     OffsetPageTable::new(level_4_table, physical_memory_offset)
 }
 
@@ -57,5 +60,11 @@ unsafe impl FrameAllocator<Size4KiB> for BootInfoFrameAllocator {
         let frame = self.usable_frames().nth(self.next);
         self.next += 1;
         frame
+    }
+}
+
+pub fn phys_to_virt(phys_addr: PhysAddr) -> VirtAddr {
+    unsafe {
+        VirtAddr::new(phys_addr.as_u64() + PHYSICAL_MEMORY_OFFSET.as_u64())
     }
 }
