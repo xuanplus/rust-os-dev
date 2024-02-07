@@ -15,6 +15,8 @@ spin = "0.9.8"
 x86_64 = "0.14.11"
 acpi = "5.0.0"
 linked_list_allocator = "0.10.5"
+bit_field = "0.10.2"
+bitflags = "2.4.2"
 
 [dependencies.lazy_static]
 version = "1.4.0"

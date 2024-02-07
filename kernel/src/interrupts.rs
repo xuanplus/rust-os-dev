@@ -50,10 +50,10 @@ extern "x86-interrupt" fn double_fault_handler(
 }
 
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
-    use crate::apic::APIC;
+    use crate::apic::lapic::LAPIC;
     print!(".");
     unsafe {
-        APIC.end_inferrupts();
+        LAPIC.end_inferrupts();
     }
 }
 
@@ -61,8 +61,8 @@ extern "x86-interrupt" fn page_fault_handler(
     stack_frame: InterruptStackFrame,
     error_code: PageFaultErrorCode,
 ) {
-    use x86_64::registers::control::Cr2;
     use crate::hlt_loop;
+    use x86_64::registers::control::Cr2;
 
     println!("EXCEPTION: PAGE FAULT");
     println!("Accessed Address: {:?}", Cr2::read());

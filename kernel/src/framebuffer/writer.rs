@@ -64,9 +64,9 @@ impl FramebufferWriter {
         if (0..info.width).contains(&x) && (0..info.height).contains(&y) {
             let index = (y * info.stride + x) * info.bytes_per_pixel;
             let color = match info.pixel_format {
-                PixelFormat::Rgb => [pixel.color().r(), pixel.color().g(), pixel.color().b()],
-                PixelFormat::Bgr => [pixel.color().b(), pixel.color().g(), pixel.color().r()],
-                PixelFormat::U8 => [pixel.color().r(), pixel.color().r(), pixel.color().r()],
+                PixelFormat::Rgb => [pixel.color().r(), pixel.color().g(), pixel.color().b(), 0],
+                PixelFormat::Bgr => [pixel.color().b(), pixel.color().g(), pixel.color().r(), 0],
+                PixelFormat::U8 => [pixel.color().r(), pixel.color().r(), pixel.color().r(), 0],
                 other => panic!("pixel format {:?} not supported in logger", other),
             };
             self.buffer.as_mut().unwrap()[index..(index + info.bytes_per_pixel)]

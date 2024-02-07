@@ -20,12 +20,16 @@ macro_rules! println {
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
-    FRAME_BUFFER
-        .lock()
-        .get_framebuffer()
-        .unwrap()
-        .write_fmt(args)
-        .unwrap();
+    use x86_64::instructions::interrupts;
+
+    interrupts::without_interrupts(|| {
+        FRAME_BUFFER
+            .lock()
+            .get_framebuffer()
+            .unwrap()
+            .write_fmt(args)
+            .unwrap();
+    });
 }
 
 pub fn init_framebuffer(frame_buffer: Option<&'static mut FrameBuffer>) {
