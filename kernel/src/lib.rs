@@ -4,11 +4,11 @@
 extern crate alloc;
 
 pub mod allocator;
+pub mod apic;
 pub mod framebuffer;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;
-pub mod apic;
 
 use crate::memory::BootInfoFrameAllocator;
 use bootloader_api::info::FrameBuffer;
@@ -30,9 +30,12 @@ pub fn init(boot_info: &'static mut BootInfo) {
     let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_regions) };
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
 
-    // Init Apic
-    let rsdp_addr = boot_info.rsdp_addr.as_ref().unwrap();
-    apic::init(rsdp_addr);
+    // Init LAPIC
+    unsafe {
+        apic::lapic::LAPIC.init();
+        apic::ioapic::init(boot_info.rsdp_addr.as_ref().unwrap());
+        apic::lapic::LAPIC.enable();
+    }
 
     // Enable interrupts
     x86_64::instructions::interrupts::enable();

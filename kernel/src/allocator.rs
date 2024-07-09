@@ -7,7 +7,7 @@ use x86_64::{
 };
 
 pub const HEAP_START: *mut u8 = 0x_4444_4444_0000 as *mut u8;
-pub const HEAP_SIZE: usize = 100 * 1024;
+pub const HEAP_SIZE: u64 = 100 * 1024;
 
 #[global_allocator]
 static ALLOCATOR: LockedHeap = LockedHeap::empty();
@@ -33,7 +33,7 @@ pub fn init_heap(
     }
 
     unsafe {
-        ALLOCATOR.lock().init(HEAP_START, HEAP_SIZE);
+        ALLOCATOR.lock().init(HEAP_START, HEAP_SIZE as usize);
     }
 
     Ok(())
