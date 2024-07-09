@@ -1,7 +1,6 @@
-pub mod font;
-pub mod utils;
-pub mod wrapper;
-pub mod writer;
+mod utils;
+mod wrapper;
+mod writer;
 
 use crate::framebuffer::wrapper::FRAME_BUFFER;
 use bootloader_api::info::FrameBuffer;
@@ -21,16 +20,18 @@ macro_rules! println {
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
+    use x86_64::instructions::interrupts;
 
-    FRAME_BUFFER
-        .lock()
-        .get_framebuffer()
-        .unwrap()
-        .write_fmt(args)
-        .unwrap();
+    interrupts::without_interrupts(|| {
+        FRAME_BUFFER
+            .lock()
+            .get_framebuffer()
+            .unwrap()
+            .write_fmt(args)
+            .unwrap();
+    });
 }
 
 pub fn init_framebuffer(frame_buffer: Option<&'static mut FrameBuffer>) {
-    font::bitmap_init();
     FRAME_BUFFER.lock().set_framebuffer(frame_buffer);
 }

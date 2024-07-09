@@ -1,23 +1,45 @@
 use super::utils::{Color, Pixel, Point};
-use super::font::get_bitmap;
+use noto_sans_mono_bitmap::{
+    get_raster, get_raster_width, FontWeight, RasterHeight, RasterizedChar,
+};
+
+mod font_constants {
+    use super::{get_raster_width, FontWeight, RasterHeight};
+    pub const CHAR_RASTER_HEIGHT: RasterHeight = RasterHeight::Size24;
+    pub const CHAR_RASTER_WIDTH: usize = get_raster_width(FontWeight::Regular, CHAR_RASTER_HEIGHT);
+    pub const BACKUP_CHAR: char = '�';
+    pub const FONT_WEIGHT: FontWeight = FontWeight::Regular;
+}
+
+use font_constants::BACKUP_CHAR;
 
 use bootloader_api::info::FrameBufferInfo;
 use bootloader_api::info::PixelFormat;
 use core::fmt;
 
-const LINE_SPACING: usize = 1;
+const LINE_SPACING: usize = 0;
 const LETTER_SPACING: usize = 0;
-const BORDER_PADDING: usize = 1;
+const BORDER_PADDING: usize = 0;
 
-const FONT_WIDTH: usize = 9;
-const FONT_HEIGHT: usize = 15;
-const LINE_HEIGHT: usize = FONT_HEIGHT + LINE_SPACING;
+const LINE_HEIGHT: usize = LINE_SPACING + font_constants::CHAR_RASTER_HEIGHT.val();
+const FONT_WIDTH: usize = font_constants::CHAR_RASTER_WIDTH + LETTER_SPACING;
+
+fn get_char_raster(c: char) -> RasterizedChar {
+    fn get(c: char) -> Option<RasterizedChar> {
+        get_raster(
+            c,
+            font_constants::FONT_WEIGHT,
+            font_constants::CHAR_RASTER_HEIGHT,
+        )
+    }
+    get(c).unwrap_or_else(|| get(BACKUP_CHAR).expect("Should get raster of backup char."))
+}
 
 pub static mut FRAME_BUFFER_INTERNAL: FramebufferWriter = FramebufferWriter {
     info: None,
     buffer: None,
-    x_pos: 0,
-    y_pos: 0,
+    x_pos: BORDER_PADDING,
+    y_pos: BORDER_PADDING,
 };
 
 pub struct FramebufferWriter {
@@ -33,23 +55,9 @@ impl FramebufferWriter {
     }
 
     pub fn clear(&mut self) {
+        self.x_pos = BORDER_PADDING;
+        self.y_pos = BORDER_PADDING;
         self.buffer.as_mut().unwrap().fill(0);
-    }
-
-    fn set_pixel(&mut self, pixel: &Pixel) {
-        let info = self.info().unwrap();
-        let (x, y) = pixel.point().into();
-        if (0..info.width).contains(&x) && (0..info.height).contains(&y) {
-            let index = (y * info.stride + x) * info.bytes_per_pixel;
-            let color = match info.pixel_format {
-                PixelFormat::Rgb => [pixel.color().r(), pixel.color().g(), pixel.color().b(), 0],
-                PixelFormat::Bgr => [pixel.color().b(), pixel.color().g(), pixel.color().r(), 0],
-                PixelFormat::U8 => [pixel.color().r(), pixel.color().r(), pixel.color().r(), 0],
-                other => panic!("pixel format {:?} not supported in logger", other),
-            };
-            self.buffer.as_mut().unwrap()[index..(index + info.bytes_per_pixel)]
-                .copy_from_slice(&color[..info.bytes_per_pixel])
-        }
     }
 
     fn newline(&mut self) {
@@ -61,23 +69,11 @@ impl FramebufferWriter {
         self.x_pos = BORDER_PADDING;
     }
 
-    fn write_rendered_char(&mut self, bitmap: [[u8; 9]; 15]) {
-        for (y, row) in bitmap.iter().enumerate() {
-            for (x, byte) in row.iter().enumerate() {
-                let pixel = &Pixel::new(
-                    Point::new(self.x_pos + x, self.y_pos + y),
-                    Color::new(*byte * 255, *byte * 255, *byte * 255),
-                );
-                self.set_pixel(pixel)
-            }
-        }
-        self.x_pos += FONT_WIDTH + LETTER_SPACING;
-    }
-
     fn scroll(&mut self) {
         let info = self.info.unwrap();
+        let last_len = info.height / LINE_HEIGHT * LINE_HEIGHT;
 
-        for i in 0..(info.height - LINE_HEIGHT) {
+        for i in 0..(last_len - LINE_HEIGHT) {
             let old = (i + LINE_HEIGHT) * info.stride;
             let new = i * info.stride;
             self.buffer.as_mut().unwrap().copy_within(
@@ -86,11 +82,11 @@ impl FramebufferWriter {
             );
         }
 
-        for i in (info.height - LINE_HEIGHT)..info.height {
+        for i in (last_len - LINE_HEIGHT)..last_len {
             for j in 0..info.width {
                 let index = (i * info.stride + j) * info.bytes_per_pixel;
                 self.buffer.as_mut().unwrap()[index..(index + info.bytes_per_pixel)]
-                    .copy_from_slice(&[0, 0, 0, 0])
+                    .copy_from_slice(&[0, 0, 0, 0][..info.bytes_per_pixel])
             }
         }
 
@@ -108,12 +104,44 @@ impl FramebufferWriter {
                 if new_xpos >= info.width {
                     self.newline();
                 }
+
                 let new_ypos = self.y_pos + LINE_HEIGHT;
                 if new_ypos > info.height {
+                    //self.y_pos = BORDER_PADDING;
                     self.scroll()
                 }
-                self.write_rendered_char(get_bitmap(c).unwrap());
+
+                self.write_rendered_char(get_char_raster(c));
             }
+        }
+    }
+
+    fn write_rendered_char(&mut self, rendered_char: RasterizedChar) {
+        for (y, row) in rendered_char.raster().iter().enumerate() {
+            for (x, byte) in row.iter().enumerate() {
+                // self.write_pixel(self.x_pos + x, self.y_pos + y, *byte);
+                self.set_pixel(&Pixel::new(
+                    Point::new(self.x_pos + x, self.y_pos + y),
+                    Color::new(*byte, *byte, *byte),
+                ))
+            }
+        }
+        self.x_pos += FONT_WIDTH;
+    }
+
+    fn set_pixel(&mut self, pixel: &Pixel) {
+        let info = self.info().unwrap();
+        let (x, y) = pixel.point().into();
+        if (0..info.width).contains(&x) && (0..info.height).contains(&y) {
+            let index = (y * info.stride + x) * info.bytes_per_pixel;
+            let color = match info.pixel_format {
+                PixelFormat::Rgb => [pixel.color().r(), pixel.color().g(), pixel.color().b(), 0],
+                PixelFormat::Bgr => [pixel.color().b(), pixel.color().g(), pixel.color().r(), 0],
+                PixelFormat::U8 => [pixel.color().r(), pixel.color().r(), pixel.color().r(), 0],
+                other => panic!("pixel format {:?} not supported in logger", other),
+            };
+            self.buffer.as_mut().unwrap()[index..(index + info.bytes_per_pixel)]
+                .copy_from_slice(&color[..info.bytes_per_pixel])
         }
     }
 }
