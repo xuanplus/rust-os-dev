@@ -7,7 +7,7 @@ fn main() {
     let mut cmd = std::process::Command::new("qemu-system-x86_64");
     cmd.arg("-serial").arg("stdio");
     if uefi {
-        cmd.arg("-bios").arg("/usr/share/ovmf/OVMF.fd");
+        cmd.arg("-bios").arg("./OVMF-pure-efi.fd");
         cmd.arg("-drive").arg(format!("format=raw,file={uefi_path}"));
     } else {
         cmd.arg("-drive").arg(format!("format=raw,file={bios_path}"));
