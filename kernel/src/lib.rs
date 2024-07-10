@@ -1,5 +1,6 @@
 #![no_std]
 #![feature(abi_x86_interrupt)]
+#![feature(allocator_api)]
 
 extern crate alloc;
 
@@ -31,14 +32,10 @@ pub fn init(boot_info: &'static mut BootInfo) {
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
 
     // Init LAPIC
-    unsafe {
-        apic::lapic::LAPIC.init();
-        apic::ioapic::init(boot_info.rsdp_addr.as_ref().unwrap());
-        apic::lapic::LAPIC.enable();
-    }
+    apic::init(boot_info.rsdp_addr.as_ref().unwrap());
 
     // Enable interrupts
-    x86_64::instructions::interrupts::enable();
+    interrupts::enable();
 }
 
 pub fn hlt_loop() -> ! {

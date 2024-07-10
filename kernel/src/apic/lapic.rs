@@ -1,4 +1,4 @@
-use x2apic::lapic::{xapic_base, LocalApic, LocalApicBuilder};
+use x2apic::lapic::{LocalApic, LocalApicBuilder};
 use x86_64::instructions::port::Port;
 use x86_64::PhysAddr;
 
@@ -9,10 +9,8 @@ pub struct LApic {
 }
 
 impl LApic {
-    pub fn init(&mut self) {
+    pub fn init(&mut self, local_apic_address: u64) {
         unsafe {
-            // Disable 8259 immediately
-
             let mut cmd_8259a = Port::<u8>::new(0x20);
             let mut data_8259a = Port::<u8>::new(0x21);
             let mut cmd_8259b = Port::<u8>::new(0xa0);
@@ -43,9 +41,8 @@ impl LApic {
             data_8259b.write(u8::MAX);
         }
 
-        let apic_physical_address: u64 = unsafe { xapic_base() };
         let apic_virtual_address: u64 =
-            crate::memory::phys_to_virt(PhysAddr::new(apic_physical_address)).as_u64();
+            crate::memory::phys_to_virt(PhysAddr::new(local_apic_address)).as_u64();
 
         self.lapic = LocalApicBuilder::default()
             .timer_vector(32)
@@ -54,9 +51,6 @@ impl LApic {
             .set_xapic_base(apic_virtual_address)
             .build()
             .ok();
-        unsafe {
-            self.lapic.as_mut().unwrap().enable();
-        }
     }
 
     pub fn enable(&mut self) {
@@ -78,8 +72,6 @@ impl LApic {
     }
 
     pub fn id(&self) -> u32 {
-        unsafe {
-            self.lapic.as_ref().unwrap().id()
-        }
+        unsafe { self.lapic.as_ref().unwrap().id() }
     }
 }
