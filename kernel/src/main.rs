@@ -13,11 +13,21 @@ pub static BOOTLOADER_CONFIG: BootloaderConfig = {
     config
 };
 
+pub static mut CHAR: char = '\0';
+
 entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     kernel::init(boot_info);
-    kernel::hlt_loop()
+
+    use kernel::task::keyboard::print_keypresses;
+    use kernel::task::shell::shell;
+    use kernel::task::{executor::Executor, Task};
+
+    let mut executor = Executor::new();
+    executor.spawn(Task::new(print_keypresses()));
+    executor.spawn(Task::new(shell()));
+    executor.run();
 }
 
 #[panic_handler]

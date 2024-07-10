@@ -10,6 +10,7 @@ pub mod framebuffer;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;
+pub mod task;
 
 use crate::memory::BootInfoFrameAllocator;
 use bootloader_api::info::FrameBuffer;
