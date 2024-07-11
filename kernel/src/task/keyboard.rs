@@ -1,4 +1,4 @@
-// use crate::print;
+use crate::print;
 use crate::println;
 use conquer_once::spin::OnceCell;
 use core::{
@@ -71,16 +71,23 @@ pub async fn print_keypresses() {
         HandleControl::Ignore,
     );
 
+    use crate::framebuffer::writer::FRAME_BUFFER_INTERNAL;
+
     while let Some(scancode) = scancodes.next().await {
         if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
             if let Some(key) = keyboard.process_keyevent(key_event) {
                 match key {
-                    DecodedKey::Unicode(character) => {
-                        super::shell::add_char(character)
+                    DecodedKey::Unicode(c) => unsafe {
+                        if c == '\u{8}' {
+                            FRAME_BUFFER_INTERNAL.back();
+                            print!(" ");
+                            FRAME_BUFFER_INTERNAL.back();
+                        }
+                        super::shell::add_char(c)
                     },
                     DecodedKey::RawKey(_key) => {
-                        // print!("{:?}", key)
-                    },
+                        print!("{:?}", key)
+                    }
                 }
             }
         }

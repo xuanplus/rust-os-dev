@@ -60,6 +60,14 @@ impl FramebufferWriter {
         self.buffer.as_mut().unwrap().fill(0);
     }
 
+    pub fn back(&mut self) {
+        self.x_pos -= FONT_WIDTH;
+    }
+
+    pub fn forward(&mut self) {
+        self.x_pos += FONT_WIDTH;
+    }
+
     fn newline(&mut self) {
         self.y_pos += LINE_HEIGHT;
         self.carriage_return()

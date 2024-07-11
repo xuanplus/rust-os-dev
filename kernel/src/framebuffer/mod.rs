@@ -1,6 +1,6 @@
 mod utils;
 mod wrapper;
-mod writer;
+pub mod writer;
 
 use crate::framebuffer::wrapper::FRAME_BUFFER;
 use bootloader_api::info::FrameBuffer;

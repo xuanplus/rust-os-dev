@@ -1,15 +1,15 @@
-use alloc::vec::Vec;
-use conquer_once::spin::OnceCell;
-use crossbeam_queue::ArrayQueue;
-use futures_util::Stream;
-use futures_util::StreamExt;
 use crate::print;
 use crate::println;
+use alloc::vec::Vec;
+use conquer_once::spin::OnceCell;
 use core::{
     pin::Pin,
     task::{Context, Poll},
 };
+use crossbeam_queue::ArrayQueue;
 use futures_util::task::AtomicWaker;
+use futures_util::Stream;
+use futures_util::StreamExt;
 
 static CHAR_QUEUE: OnceCell<ArrayQueue<char>> = OnceCell::uninit();
 
@@ -42,9 +42,7 @@ impl Stream for CharStream {
     type Item = char;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<char>> {
-        let queue = CHAR_QUEUE
-            .try_get()
-            .expect("char queue not initialized");
+        let queue = CHAR_QUEUE.try_get().expect("char queue not initialized");
 
         if let Some(c) = queue.pop() {
             return Poll::Ready(Some(c));
@@ -75,10 +73,11 @@ pub async fn shell() {
             let s: String = string.iter().collect();
             print!("\ninput: {}\n>>>", s);
             string.clear();
+        } else if c == '\u{8}' {
+            string.pop();
         } else {
             string.push(c);
             print!("{}", c);
         }
-        
     }
 }
