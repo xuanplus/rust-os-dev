@@ -1,16 +1,18 @@
 use bootloader_api::info::{MemoryRegionKind, MemoryRegions};
 use x86_64::{
+    PhysAddr, VirtAddr,
     structures::paging::{FrameAllocator, PhysFrame, Size4KiB},
     structures::paging::{OffsetPageTable, PageTable},
-    PhysAddr, VirtAddr,
 };
 
 static mut PHYSICAL_MEMORY_OFFSET: VirtAddr = VirtAddr::zero();
 
 pub unsafe fn init(physical_memory_offset: VirtAddr) -> OffsetPageTable<'static> {
-    let level_4_table = active_level_4_table(physical_memory_offset);
-    unsafe { PHYSICAL_MEMORY_OFFSET = physical_memory_offset; }
-    OffsetPageTable::new(level_4_table, physical_memory_offset)
+    unsafe {
+        let level_4_table = active_level_4_table(physical_memory_offset);
+        PHYSICAL_MEMORY_OFFSET = physical_memory_offset;
+        OffsetPageTable::new(level_4_table, physical_memory_offset)
+    }
 }
 
 pub unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut PageTable {
@@ -22,7 +24,7 @@ pub unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static
     let virt = physical_memory_offset + phys.as_u64();
     let page_table_ptr: *mut PageTable = virt.as_mut_ptr();
 
-    &mut *page_table_ptr
+    unsafe { &mut *page_table_ptr }
 }
 
 pub struct EmptyFrameAllocator;
@@ -64,7 +66,5 @@ unsafe impl FrameAllocator<Size4KiB> for BootInfoFrameAllocator {
 }
 
 pub fn phys_to_virt(phys_addr: PhysAddr) -> VirtAddr {
-    unsafe {
-        VirtAddr::new(phys_addr.as_u64() + PHYSICAL_MEMORY_OFFSET.as_u64())
-    }
+    unsafe { VirtAddr::new(phys_addr.as_u64() + PHYSICAL_MEMORY_OFFSET.as_u64()) }
 }

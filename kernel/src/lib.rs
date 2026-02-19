@@ -20,7 +20,7 @@ use x86_64::VirtAddr;
 pub fn init(boot_info: &'static mut BootInfo) {
     // Init framebuffer
     let fb_option: Option<&'static mut FrameBuffer> = boot_info.framebuffer.as_mut();
-    framebuffer::init_framebuffer(fb_option);
+    framebuffer::init(fb_option.unwrap());
 
     // Init interrupts
     gdt::init();

@@ -22,7 +22,7 @@ pub fn init(apic: Apic<Global>) {
             let mut e = RedirectionTableEntry::default();
             e.set_mode(IrqMode::Fixed);
             e.set_vector(33);
-            e.set_dest(LAPIC.id() as u8);
+            e.set_dest(LAPIC.lock().id() as u8);
 
             ioapic.set_table_entry(1, e);
 

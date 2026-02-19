@@ -1,13 +1,14 @@
 [package]
 name = "rust-os-dev"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [workspace]
 members = ["kernel"]
 
-[dependencies]
-
 [build-dependencies]
+bootloader = "0.11"
 kernel = { path = "kernel", artifact = "bin", target = "x86_64-unknown-none" }
-bootloader = "0.11.7"
+
+[dependencies]
+ovmf-prebuilt = "0.2"

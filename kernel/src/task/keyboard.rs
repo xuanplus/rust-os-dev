@@ -71,20 +71,20 @@ pub async fn print_keypresses() {
         HandleControl::Ignore,
     );
 
-    use crate::framebuffer::writer::FRAME_BUFFER_INTERNAL;
+    use crate::framebuffer::writer::FRAMEBUFFER;
 
     while let Some(scancode) = scancodes.next().await {
         if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
             if let Some(key) = keyboard.process_keyevent(key_event) {
                 match key {
-                    DecodedKey::Unicode(c) => unsafe {
+                    DecodedKey::Unicode(c) => {
                         if c == '\u{8}' {
-                            FRAME_BUFFER_INTERNAL.back();
+                            FRAMEBUFFER.lock().back();
                             print!(" ");
-                            FRAME_BUFFER_INTERNAL.back();
+                            FRAMEBUFFER.lock().back();
                         }
                         super::shell::add_char(c)
-                    },
+                    }
                     DecodedKey::RawKey(_key) => {
                         print!("{:?}", key)
                     }

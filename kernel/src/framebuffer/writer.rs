@@ -1,71 +1,67 @@
-use super::utils::{Color, Pixel, Point};
 use noto_sans_mono_bitmap::{
     get_raster, get_raster_width, FontWeight, RasterHeight, RasterizedChar,
 };
 
-mod font_constants {
-    use super::{get_raster_width, FontWeight, RasterHeight};
-    pub const CHAR_RASTER_HEIGHT: RasterHeight = RasterHeight::Size24;
-    pub const CHAR_RASTER_WIDTH: usize = get_raster_width(FontWeight::Regular, CHAR_RASTER_HEIGHT);
-    pub const BACKUP_CHAR: char = '�';
-    pub const FONT_WEIGHT: FontWeight = FontWeight::Regular;
-}
-
-use font_constants::BACKUP_CHAR;
-
-use bootloader_api::info::FrameBufferInfo;
+use bootloader_api::info::FrameBuffer;
 use bootloader_api::info::PixelFormat;
-use core::fmt;
+use spin::Mutex;
+
+const CHAR_RASTER_HEIGHT: RasterHeight = RasterHeight::Size24;
+const CHAR_RASTER_WIDTH: usize = get_raster_width(FontWeight::Regular, CHAR_RASTER_HEIGHT);
+const BACKUP_CHAR: char = '�';
+const FONT_WEIGHT: FontWeight = FontWeight::Regular;
 
 const LINE_SPACING: usize = 0;
 const LETTER_SPACING: usize = 0;
-const BORDER_PADDING: usize = 0;
+const BORDER_PADDING: usize = 3;
 
-const LINE_HEIGHT: usize = LINE_SPACING + font_constants::CHAR_RASTER_HEIGHT.val();
-const FONT_WIDTH: usize = font_constants::CHAR_RASTER_WIDTH + LETTER_SPACING;
+const LINE_HEIGHT: usize = LINE_SPACING + CHAR_RASTER_HEIGHT.val();
+const FONT_WIDTH: usize = CHAR_RASTER_WIDTH + LETTER_SPACING;
 
 fn get_char_raster(c: char) -> RasterizedChar {
     fn get(c: char) -> Option<RasterizedChar> {
-        get_raster(
-            c,
-            font_constants::FONT_WEIGHT,
-            font_constants::CHAR_RASTER_HEIGHT,
-        )
+        get_raster(c, FONT_WEIGHT, CHAR_RASTER_HEIGHT)
     }
     get(c).unwrap_or_else(|| get(BACKUP_CHAR).expect("Should get raster of backup char."))
 }
 
-pub static mut FRAME_BUFFER_INTERNAL: FramebufferWriter = FramebufferWriter {
-    info: None,
+pub static FRAMEBUFFER: Mutex<Framebuffer> = Mutex::new(Framebuffer {
     buffer: None,
     x_pos: BORDER_PADDING,
     y_pos: BORDER_PADDING,
-};
+    width: 0,
+    height: 0,
+    pixel_format: PixelFormat::Rgb,
+    bytes_per_pixel: 0,
+    stride: 0,
+});
 
-pub struct FramebufferWriter {
-    pub info: Option<FrameBufferInfo>,
-    pub buffer: Option<&'static mut [u8]>,
+pub struct Framebuffer {
+    buffer: Option<&'static mut [u8]>,
     x_pos: usize,
     y_pos: usize,
+    width: usize,
+    height: usize,
+    pixel_format: PixelFormat,
+    bytes_per_pixel: usize,
+    stride: usize,
 }
 
-impl FramebufferWriter {
-    pub fn info(&self) -> Option<FrameBufferInfo> {
-        unsafe { FRAME_BUFFER_INTERNAL.info }
+impl Framebuffer {
+    pub fn init(&mut self, framebuffer: &'static mut FrameBuffer) {
+        let info = framebuffer.info();
+        self.width = info.width;
+        self.height = info.height;
+        self.pixel_format = info.pixel_format;
+        self.bytes_per_pixel = info.bytes_per_pixel;
+        self.stride = info.stride;
+        self.buffer = Some(framebuffer.buffer_mut());
     }
 
     pub fn clear(&mut self) {
         self.x_pos = BORDER_PADDING;
         self.y_pos = BORDER_PADDING;
         self.buffer.as_mut().unwrap().fill(0);
-    }
-
-    pub fn back(&mut self) {
-        self.x_pos -= FONT_WIDTH;
-    }
-
-    pub fn forward(&mut self) {
-        self.x_pos += FONT_WIDTH;
     }
 
     fn newline(&mut self) {
@@ -77,44 +73,44 @@ impl FramebufferWriter {
         self.x_pos = BORDER_PADDING;
     }
 
-    fn scroll(&mut self) {
-        let info = self.info.unwrap();
-        let last_len = info.height / LINE_HEIGHT * LINE_HEIGHT;
+    pub fn back(&mut self) {
+        self.x_pos -= FONT_WIDTH;
+    }
 
-        for i in 0..(last_len - LINE_HEIGHT) {
-            let old = (i + LINE_HEIGHT) * info.stride;
-            let new = i * info.stride;
-            self.buffer.as_mut().unwrap().copy_within(
-                (old * info.bytes_per_pixel)..((old + info.stride) * info.bytes_per_pixel),
-                new * info.bytes_per_pixel,
+    pub fn forward(&mut self) {
+        self.x_pos += FONT_WIDTH;
+    }
+
+    fn scroll(&mut self) {
+        let lines = self.height / LINE_HEIGHT * LINE_HEIGHT;
+        let src_start = LINE_HEIGHT * self.stride * self.bytes_per_pixel;
+        let bytes_to_copy = (lines - LINE_HEIGHT) * self.stride * self.bytes_per_pixel;
+
+        unsafe {
+            core::ptr::copy(
+                self.buffer.as_mut().unwrap()[src_start..].as_ptr(),
+                self.buffer.as_mut().unwrap().as_mut_ptr(),
+                bytes_to_copy,
             );
         }
 
-        for i in (last_len - LINE_HEIGHT)..last_len {
-            for j in 0..info.width {
-                let index = (i * info.stride + j) * info.bytes_per_pixel;
-                self.buffer.as_mut().unwrap()[index..(index + info.bytes_per_pixel)]
-                    .copy_from_slice(&[0, 0, 0, 0][..info.bytes_per_pixel])
-            }
-        }
-
-        self.y_pos -= LINE_HEIGHT;
+        let clear_start = bytes_to_copy;
+        self.buffer.as_mut().unwrap()[clear_start..].fill(0);
+        self.y_pos = self.y_pos.saturating_sub(LINE_HEIGHT);
     }
 
     fn write_char(&mut self, c: char) {
-        let info = self.info.unwrap();
-
         match c {
             '\n' => self.newline(),
             '\r' => self.carriage_return(),
             c => {
                 let new_xpos = self.x_pos + FONT_WIDTH;
-                if new_xpos >= info.width {
+                if new_xpos >= self.width {
                     self.newline();
                 }
 
                 let new_ypos = self.y_pos + LINE_HEIGHT;
-                if new_ypos > info.height {
+                if new_ypos > self.height {
                     //self.y_pos = BORDER_PADDING;
                     self.scroll()
                 }
@@ -127,38 +123,32 @@ impl FramebufferWriter {
     fn write_rendered_char(&mut self, rendered_char: RasterizedChar) {
         for (y, row) in rendered_char.raster().iter().enumerate() {
             for (x, byte) in row.iter().enumerate() {
-                // self.write_pixel(self.x_pos + x, self.y_pos + y, *byte);
-                self.set_pixel(&Pixel::new(
-                    Point::new(self.x_pos + x, self.y_pos + y),
-                    Color::new(*byte, *byte, *byte),
-                ))
+                self.set_pixel(self.x_pos + x, self.y_pos + y, *byte, *byte, *byte);
             }
         }
         self.x_pos += FONT_WIDTH;
     }
 
-    fn set_pixel(&mut self, pixel: &Pixel) {
-        let info = self.info().unwrap();
-        let (x, y) = pixel.point().into();
-        if (0..info.width).contains(&x) && (0..info.height).contains(&y) {
-            let index = (y * info.stride + x) * info.bytes_per_pixel;
-            let color = match info.pixel_format {
-                PixelFormat::Rgb => [pixel.color().r(), pixel.color().g(), pixel.color().b(), 0],
-                PixelFormat::Bgr => [pixel.color().b(), pixel.color().g(), pixel.color().r(), 0],
-                PixelFormat::U8 => [pixel.color().r(), pixel.color().r(), pixel.color().r(), 0],
+    fn set_pixel(&mut self, x: usize, y: usize, r: u8, g: u8, b: u8) {
+        if (0..self.width).contains(&x) && (0..self.height).contains(&y) {
+            let index = (y * self.stride + x) * self.bytes_per_pixel;
+            let color = match self.pixel_format {
+                PixelFormat::Rgb => [r, g, b, 0],
+                PixelFormat::Bgr => [b, g, r, 0],
+                PixelFormat::U8 => [r, r, r, 0],
                 other => panic!("pixel format {:?} not supported in logger", other),
             };
-            self.buffer.as_mut().unwrap()[index..(index + info.bytes_per_pixel)]
-                .copy_from_slice(&color[..info.bytes_per_pixel])
+            self.buffer.as_mut().unwrap()[index..(index + self.bytes_per_pixel)]
+                .copy_from_slice(&color[..self.bytes_per_pixel])
         }
     }
 }
 
-unsafe impl Send for FramebufferWriter {}
-unsafe impl Sync for FramebufferWriter {}
+unsafe impl Send for Framebuffer {}
+unsafe impl Sync for Framebuffer {}
 
-impl fmt::Write for FramebufferWriter {
-    fn write_str(&mut self, s: &str) -> fmt::Result {
+impl core::fmt::Write for Framebuffer {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
         for c in s.chars() {
             self.write_char(c);
         }

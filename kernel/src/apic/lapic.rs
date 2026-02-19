@@ -1,8 +1,9 @@
 use x2apic::lapic::{LocalApic, LocalApicBuilder};
 use x86_64::instructions::port::Port;
 use x86_64::PhysAddr;
+use spin::Mutex;
 
-pub static mut LAPIC: LApic = LApic { lapic: None };
+pub static LAPIC: Mutex<LApic> = Mutex::new(LApic { lapic: None });
 
 pub struct LApic {
     lapic: Option<LocalApic>,

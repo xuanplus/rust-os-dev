@@ -163,9 +163,7 @@ pub extern "x86-interrupt" fn security_exception_handler(
 
 /// #32
 pub extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
-    unsafe {
-        apic::lapic::LAPIC.end_inferrupts();
-    }
+    apic::lapic::LAPIC.lock().end_inferrupts();
 }
 
 /// #33
@@ -176,7 +174,5 @@ pub extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: Interrupt
     let scancode: u8 = unsafe { port.read() };
     crate::task::keyboard::add_scancode(scancode);
 
-    unsafe {
-        apic::lapic::LAPIC.end_inferrupts();
-    }
+    apic::lapic::LAPIC.lock().end_inferrupts();
 }
